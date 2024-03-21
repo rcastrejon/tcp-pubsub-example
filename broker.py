@@ -2,6 +2,11 @@ import json
 import socket
 import threading
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from models import Event
+
 
 class Broker:
     subscribers: dict[str, list[socket.socket]] = {}
@@ -12,6 +17,8 @@ class Broker:
         self.port = port
         self.stop_event = threading.Event()
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        self.engine = create_engine("sqlite:///local.db", echo=True)
 
     def start(self):
         # Crea el socket del servidor y lo pone a escuchar
@@ -57,6 +64,17 @@ class Broker:
 
         if event_type == "PUBLISH":
             message = event.get("message")
+
+            # Guarda el evento en la base de datos
+            with Session(self.engine) as session:
+                event = Event(
+                    type=event_type,
+                    topic=topic_name,
+                    message=message,
+                )
+                session.add(event)
+                session.commit()
+
             self.publish(topic_name, message, client_socket)
         elif event_type == "SUBSCRIBE":
             self.subscribe(topic_name, client_socket)
